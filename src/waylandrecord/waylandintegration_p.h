@@ -203,6 +203,21 @@ private:
      * @brief initScreenFrameBuffer 初始化屏幕数据数组
      */
     void initScreenFrameBuffer();
+
+    /**
+     * @brief saveRemoteBuffer 保存远程buffer（新的方案）
+     * @param rbuf
+     * @param screenGeometry
+     */
+    void saveRemoteBuffer(KWayland::Client::RemoteBuffer *rbuf,QRect screenGeometry);
+    void saveBuffer(KWayland::Client::RemoteBuffer *inbuf,KWayland::Client::RemoteBuffer *&outbuf);
+
+
+    void saveRemoteBuffer(const KWayland::Client::RemoteBuffer *rbuf,QRect screenGeometry);
+
+    void appendRB(KWayland::Client::RemoteBuffer *&rbuf,QRect screenGeometry,int screenId = 0);
+    void appendRemoteBuffer();
+
 public:
     /**
      * @ 内存由getFrame函数内部申请
@@ -223,6 +238,9 @@ public:
      * @brief 从数据池取取数据的线程的开关。当数据池有数据时被启动
      */
     bool m_appendFrameToListFlag = false;
+    bool m_isAppendRemoteBuffer = false;
+    int m_handleRemoteBufferCount = 1;
+
 private:
     /**
      * @brief 是否是hw电脑
@@ -244,7 +262,26 @@ private:
     QPair<qint64, QImage> m_curNewImage;
     FrameData m_curNewImageData;
 
+    /**
+     * @brief m_fristScreenFd 第一个屏幕的Buffer
+     * 交替存两个Buffer。使用那个Buffer，就只存另一个Buffer
+     */
+    QPair<KWayland::Client::RemoteBuffer *, KWayland::Client::RemoteBuffer*> m_firstScreenBuf;
+    QPair<const KWayland::Client::RemoteBuffer *, const KWayland::Client::RemoteBuffer*> m_firstScreenBufConst;
 
+    int m_firstScreenBufState[2];
+    /**
+     * @brief m_fristScreenFd 第二个屏幕的Buffer
+     * 交替存两个Buffer。使用那个Buffer，就只存另一个Buffer
+     */
+    QPair<KWayland::Client::RemoteBuffer *,KWayland::Client::RemoteBuffer*> m_secondScreenBuf;
+    QPair<const KWayland::Client::RemoteBuffer *,const KWayland::Client::RemoteBuffer*> m_secondScreenBufConst;
+    int m_secondScreenBufState[2];
+
+     /**
+     * @brief m_screenRect 屏幕信息
+     */
+    QPair<QRect, QRect> m_screenRect;
 
     //ffmpeg视频帧
     unsigned char *m_ffmFrame;

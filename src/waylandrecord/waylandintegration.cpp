@@ -562,7 +562,7 @@ void WaylandIntegration::WaylandIntegrationPrivate::processBuffer(const KWayland
 
 void WaylandIntegration::WaylandIntegrationPrivate::processBufferHw(const KWayland::Client::RemoteBuffer *rbuf, const QRect rect, int screenId)
 {
-    qInfo() << __FUNCTION__ << __LINE__ << "开始处理buffer...";
+    qInfo() << __FUNCTION__ << __LINE__ << "开始处理buffer... rbuf: " << rbuf;
     qDebug() << ">>>>>> open fd!" << rbuf->fd();
 //    QScopedPointer<const KWayland::Client::RemoteBuffer> guard(rbuf);
     auto dma_fd = rbuf->fd();
@@ -955,12 +955,39 @@ void WaylandIntegration::WaylandIntegrationPrivate::setupRegistry()
 #else
         connect(m_remoteAccessManager, &KWayland::Client::RemoteAccessManager::bufferReady, this, [this](const void *output, const KWayland::Client::RemoteBuffer * rbuf) {
 #endif
-            qDebug() << "正在接收buffer...";
+            qDebug() << "正在接收buffer..." <<  rbuf->fd();
             QRect screenGeometry = (KWayland::Client::Output::get(reinterpret_cast<wl_output *>(const_cast<void *>(output))))->geometry();
             qDebug() << "screenGeometry: " << screenGeometry;
             //qDebug() << "rbuf->isValid(): " << rbuf->isValid();
-            connect(rbuf, &KWayland::Client::RemoteBuffer::parametersObtained, this, [this, rbuf, screenGeometry] {
-                qDebug() << "正在处理buffer..." << "fd:" << rbuf->fd() << "frameCount: " << frameCount ;
+//            connect(rbuf, &KWayland::Client::RemoteBuffer::parametersObtained, this, [this, rbuf, screenGeometry] {
+            if(m_boardVendorType == 2 && m_screenCount == 2){
+                //针对于特殊机型双屏的一种特殊处理
+                qDebug() << "bufferReady (start)..." << "fd:" << rbuf->fd() << "m_handleRemoteBufferCount: " << m_handleRemoteBufferCount ;
+                if(m_handleRemoteBufferCount == 0){
+                    m_bufferSize = 30;
+                }
+                else if(m_handleRemoteBufferCount){
+                    qDebug() << "bufferReady 准备保存buffer..." << "fd:" << rbuf->fd() << "m_handleRemoteBufferCount: " << m_handleRemoteBufferCount ;
+                    saveRemoteBuffer(rbuf,screenGeometry);
+                    qDebug() << "bufferReady 已保存buffer..." << "fd:" << rbuf->fd() << "m_handleRemoteBufferCount: " << m_handleRemoteBufferCount ;
+                    m_handleRemoteBufferCount++;
+                }else{
+                    close(rbuf->fd());
+                    qDebug() << "close(rbuf->fd())";
+                    rbuf->release();
+                    qDebug() << "rbuf->release()";
+                }
+                qDebug() << "rbuf->frame(): " << rbuf->frame();
+                if (rbuf->frame() == 0)
+                {
+                    m_handleRemoteBufferCount -= m_handleRemoteBufferCount-999;
+                    m_isAppendRemoteBuffer = false;
+                    qDebug() << "是否是最后一帧: " << rbuf->frame();
+                    emit lastFrame();
+                }
+                qDebug() << "bufferReady (end)..." << "fd:" << rbuf->fd() << "m_handleRemoteBufferCount: " << m_handleRemoteBufferCount ;
+            } else {
+                //
                 bool flag = false;
                 int screenId = 0;
                 if (m_screenCount == 1)
@@ -1010,12 +1037,13 @@ void WaylandIntegration::WaylandIntegrationPrivate::setupRegistry()
 #endif
                 qDebug() << "buffer已处理" << "fd:" << rbuf->fd();
 
-#ifdef KWAYLAND_REMOTE_BUFFER_RELEASE_FLAGE_ON
-
-                rbuf->release();
-#endif
+            #ifdef KWAYLAND_REMOTE_BUFFER_RELEASE_FLAGE_ON
                 qDebug() << "rbuf->release()";
-            });
+                rbuf->release();
+            #endif
+                qDebug() << "buffer已处理" << "fd:" << rbuf->fd();
+            }
+//            });
             qDebug() << "buffer已接收";
         });
     }
@@ -1026,6 +1054,334 @@ void WaylandIntegration::WaylandIntegrationPrivate::setupRegistry()
     m_registry->setup();
     qDebug() << "安装注册wayland服务已完成";
 }
+
+void WaylandIntegration::WaylandIntegrationPrivate::saveBuffer(KWayland::Client::RemoteBuffer *inbuf,KWayland::Client::RemoteBuffer *&outbuf){
+    qInfo() << ">>>>>>>>>> 打开互斥锁" << "inbuf: " <<  inbuf << "outbuf: " <<  outbuf;
+//    m_mutex.lock();
+    if(outbuf != nullptr){
+        qInfo() << ">>>>>>>>>> 1 fd" << "inbuf->fd(): " <<  inbuf->fd() << "outbuf->fd(): " <<  outbuf->fd();
+        close(outbuf->fd());
+        qDebug() << "outbuf->release()"<< outbuf->fd();
+        outbuf->release();
+        outbuf=nullptr;
+    }
+
+    qInfo() << ">>>>>>>>>> save outbuf" << "inbuf: " <<  inbuf << "outbuf: " <<  outbuf;
+    outbuf = inbuf;
+//    m_mutex.unlock();
+    qInfo() << ">>>>>>>>>> 2 fd" << "inbuf->fd(): " <<  inbuf->fd() << "outbuf->fd(): " <<  outbuf->fd();
+    qInfo() << ">>>>>>>>>> 解除互斥锁" << "inbuf: " <<  inbuf << "outbuf: " <<  outbuf;
+}
+
+void WaylandIntegration::WaylandIntegrationPrivate::saveRemoteBuffer(KWayland::Client::RemoteBuffer *rbuf, QRect screenGeometry)
+{
+    qDebug() << "正在保存buffer..." << "fd:" << rbuf->fd() << "frameCount: " << frameCount ;
+    //双屏
+    if (frameCount == 0) {
+        qDebug() << ">>>>>>>>>>>>>>>> fisrt screenGeometry: " << screenGeometry;
+        //第一帧画面的坐标不是从（0,0）开始，从第二帧开始取
+        if (screenGeometry.x() != 0 || screenGeometry.y() != 0) {
+            frameCount += 1;
+            close(rbuf->fd());
+            qDebug() << "close(rbuf->fd())";
+            rbuf->release();
+            qDebug() << "rbuf->release()";
+            return;
+        }
+    }
+    if(screenGeometry.x() == 0 && screenGeometry.y() == 0){
+        //            m_mutex.lock();
+        qInfo() << ">>>>>>>>>> save start m_firstScreenBufState[0]: " << m_firstScreenBufState[0];
+        qInfo() << ">>>>>>>>>> save start m_firstScreenBufState[1]: " << m_firstScreenBufState[1];
+        //屏幕1
+        if(m_firstScreenBufState[0] == 0){
+            m_firstScreenBufState[0] = 1;
+            saveBuffer(rbuf,m_firstScreenBuf.first);
+//            if(m_firstScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "rbuf->fd(): " <<  rbuf->fd() << "m_firstScreenBuf.first->fd(): " <<  m_firstScreenBuf.first->fd();
+//                close(m_firstScreenBuf.first->fd());
+//                qDebug() << "m_firstScreenBuf.first->release()"<< m_firstScreenBuf.first->fd();
+//                m_firstScreenBuf.first->release();
+//                m_firstScreenBuf.first = nullptr;
+//            }
+
+//            if(m_firstScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf << "rbuf->fd(): " <<  rbuf->fd()
+//                        << "m_firstScreenBuf.first: " <<  m_firstScreenBuf.first << "m_firstScreenBuf.first->fd(): " <<  m_firstScreenBuf.first->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf
+//                        << "m_firstScreenBuf.first: " <<  m_firstScreenBuf.first ;
+//            }
+//            m_firstScreenBuf.first = rbuf;
+            qInfo() << ">>>>>>>>>> save之后 m_firstScreenBuf.first: " << m_firstScreenBuf.first << m_firstScreenBuf.first->fd();
+            m_firstScreenBufState[0] = 0;
+            qInfo() << ">>>>>>>>>> save end m_firstScreenBufState[0]: " << m_firstScreenBufState[0];
+            //                m_mutex.unlock();
+
+        }else if(m_firstScreenBufState[1] == 0){
+            m_firstScreenBufState[1] = 1;
+            saveBuffer(rbuf,m_firstScreenBuf.second);
+//            if(m_firstScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> save之前 m_firstScreenBuf.second: " << m_firstScreenBuf.second << m_firstScreenBuf.second->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save之前 m_firstScreenBuf.second: " << m_firstScreenBuf.second;
+//            }
+//            if(m_firstScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "rbuf->fd(): " <<  rbuf->fd() << "m_firstScreenBuf.second->fd(): " <<  m_firstScreenBuf.second->fd();
+//                close(m_firstScreenBuf.second->fd());
+//                qDebug() << "m_firstScreenBuf.second->release()"<< m_firstScreenBuf.second->fd();
+//                m_firstScreenBuf.second->release();
+//                m_firstScreenBuf.second = nullptr;
+//            }
+
+
+//            if(m_firstScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf << "rbuf->fd(): " <<  rbuf->fd()
+//                        << "m_firstScreenBuf.second: " <<  m_firstScreenBuf.second << "m_firstScreenBuf.second->fd(): " <<  m_firstScreenBuf.second->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf
+//                        << "m_firstScreenBuf.second: " <<  m_firstScreenBuf.second ;
+//            }
+
+//            m_firstScreenBuf.second = rbuf;
+            qInfo() << ">>>>>>>>>> save之后 m_firstScreenBuf.second: " << m_firstScreenBuf.second << m_firstScreenBuf.second->fd();
+            m_firstScreenBufState[1] = 0;
+            qInfo() << ">>>>>>>>>> save end m_firstScreenBufState[1]: " << m_firstScreenBufState[1];
+            //                m_mutex.unlock();
+        }else{
+            qWarning() << "轮转buffer已满";
+            close(rbuf->fd());
+            qDebug() << "close(rbuf->fd())";
+            rbuf->release();
+            qDebug() << "rbuf->release()";
+        }
+        m_screenRect.first = screenGeometry;
+    }else{
+        //            m_mutex.lock();
+        qInfo() << ">>>>>>>>>> save start m_secondScreenBufState[0]: " << m_secondScreenBufState[0];
+        qInfo() << ">>>>>>>>>> save start m_secondScreenBufState[1]: " << m_secondScreenBufState[1];
+        //屏幕2
+        if(m_secondScreenBufState[0] == 0){
+            m_secondScreenBufState[0] = 1;
+            saveBuffer(rbuf,m_secondScreenBuf.first);
+
+//            if(m_secondScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> save之前 m_secondScreenBuf.first: " << m_secondScreenBuf.first << m_secondScreenBuf.first->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save之前 m_secondScreenBuf.first: " << m_secondScreenBuf.first ;
+//            }
+
+//            if(m_secondScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "rbuf->fd(): " <<  rbuf->fd() << "m_secondScreenBuf.first->fd(): " <<  m_secondScreenBuf.first->fd();
+//                close(m_secondScreenBuf.first->fd());
+//                qDebug() << "m_secondScreenBuf.first->release()"<< m_secondScreenBuf.first->fd();
+//                m_secondScreenBuf.first->release();
+//                m_secondScreenBuf.first = nullptr;
+//            }
+
+//            if(m_secondScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf << "rbuf->fd(): " <<  rbuf->fd()
+//                        << "m_secondScreenBuf.first: " <<  m_secondScreenBuf.first << "m_secondScreenBuf.first->fd(): " <<  m_secondScreenBuf.first->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf
+//                        << "m_secondScreenBuf.first: " <<  m_secondScreenBuf.first;
+//            }
+
+//            m_secondScreenBuf.first = rbuf;
+            qInfo() << ">>>>>>>>>> save之后 m_secondScreenBuf.first: " << m_secondScreenBuf.first << m_secondScreenBuf.first->fd();
+            m_secondScreenBufState[0] = 0;
+            qInfo() << ">>>>>>>>>> save end m_secondScreenBufState[0]: " << m_secondScreenBufState[0];
+            //                m_mutex.unlock();
+
+        }else if(m_secondScreenBufState[1] == 0){
+            m_secondScreenBufState[1] = 1;
+            saveBuffer(rbuf,m_secondScreenBuf.second);
+
+//            if(m_secondScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> save之前 m_secondScreenBuf.second: " << m_secondScreenBuf.second << m_secondScreenBuf.second->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save之前 m_secondScreenBuf.second: " << m_secondScreenBuf.second;
+//            }
+//            if(m_secondScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "rbuf->fd(): " <<  rbuf->fd() << "m_secondScreenBuf.second->fd(): " <<  m_secondScreenBuf.second->fd();
+//                close(m_secondScreenBuf.second->fd());
+//                qDebug() << "m_secondScreenBuf.second->release()"<< m_secondScreenBuf.second->fd();
+//                m_secondScreenBuf.second->release();
+//                m_secondScreenBuf.second = nullptr;
+//            }
+
+//            if(m_secondScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf << "rbuf->fd(): " <<  rbuf->fd()
+//                        << "m_secondScreenBuf.second: " <<  m_secondScreenBuf.second << "m_secondScreenBuf.second->fd(): " <<  m_secondScreenBuf.second->fd();
+//            }else{
+//                qInfo() << ">>>>>>>>>> save" << "rbuf: " <<  rbuf
+//                        << "m_secondScreenBuf.second: " <<  m_secondScreenBuf.second ;
+//            }
+
+//            m_secondScreenBuf.second = rbuf;
+            qInfo() << ">>>>>>>>>> save之后 m_secondScreenBuf.second: " << m_secondScreenBuf.second << m_secondScreenBuf.second->fd();
+            m_secondScreenBufState[1] = 0;
+            qInfo() << ">>>>>>>>>> save end m_secondScreenBufState[1]: " << m_secondScreenBufState[1];
+            //                m_mutex.unlock();
+
+        }else{
+            qWarning() << "轮转buffer已满";
+            close(rbuf->fd());
+            qDebug() << "close(rbuf->fd())";
+            rbuf->release();
+            qDebug() << "rbuf->release()";
+        }
+        m_screenRect.second = screenGeometry;
+    }
+    frameCount++;
+    if(frameCount == 4){
+        m_isAppendRemoteBuffer = true;
+        QtConcurrent::run(this, &WaylandIntegrationPrivate::appendRemoteBuffer);
+    }
+    qDebug() << "buffer已保存" << "fd:" << rbuf->fd();
+}
+
+
+void WaylandIntegration::WaylandIntegrationPrivate::saveRemoteBuffer(const KWayland::Client::RemoteBuffer *rbuf, QRect screenGeometry)
+{
+
+}
+
+void WaylandIntegration::WaylandIntegrationPrivate::appendRB(KWayland::Client::RemoteBuffer *&rbuf, QRect screenGeometry,int screenId)
+{
+    if(rbuf != nullptr){
+        qInfo() << ">>>>>>>>>> 1 fd" << "rbuf->fd(): " <<  rbuf->fd();
+        //arm hw
+        processBufferHw(rbuf, screenGeometry,screenId);
+        close(rbuf->fd());
+        rbuf->release();
+        qInfo() << ">>>>>>>>>> 2 fd" << "rbuf->fd(): " <<  rbuf->fd();
+        rbuf = nullptr;
+    }
+}
+static int bufferCount = 0;
+void WaylandIntegration::WaylandIntegrationPrivate::appendRemoteBuffer()
+{
+    qInfo() << "开始获取远程buffer..." ;
+    while(m_isAppendRemoteBuffer){
+        qInfo() << "正在获取远程buffer..." ;
+        m_mutex.lock();
+        qInfo() << ">>>>>>>>>> append start m_firstScreenBufState[0]: " << m_firstScreenBufState[0];
+        qInfo() << ">>>>>>>>>> append start m_firstScreenBufState[1]: " << m_firstScreenBufState[1];
+        if(m_firstScreenBufState[0] == 0 && m_secondScreenBufState[0] == 0){
+            m_firstScreenBufState[0] = 1;
+            qInfo() << "获取屏幕1 远程buffer1..." << "m_firstScreenBuf.first" << m_firstScreenBuf.first;
+            appendRB(m_firstScreenBuf.first,m_screenRect.first,0);
+//            if(m_firstScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "m_firstScreenBuf.first->fd(): " <<  m_firstScreenBuf.first->fd();
+//                if (m_boardVendorType) {
+//                    //arm hw
+//                    //processBuffer(rbuf, screenGeometry);
+//                    processBufferHw(m_firstScreenBuf.first, m_screenRect.first,0);
+//                } else {
+//                    //other
+//                    processBufferX86(m_firstScreenBuf.first, m_screenRect.first);
+//                }
+//                close(m_firstScreenBuf.first->fd());
+//                qInfo() << ">>>>>>>>>> m_firstScreenBuf.first->release()" <<  m_firstScreenBuf.first->fd();
+//                m_firstScreenBuf.first->release();
+//                qInfo() << ">>>>>>>>>> 2 fd" << "m_firstScreenBuf.first->fd(): " <<  m_firstScreenBuf.first->fd();
+//                m_firstScreenBuf.first = nullptr;
+//            }
+            qInfo() << "已获取屏幕1 远程buffer1"  << "m_firstScreenBuf.first" << m_firstScreenBuf.first;
+            m_firstScreenBufState[0] = 0;
+            qInfo() << ">>>>>>>>>> append end m_firstScreenBufState[0]: " << m_firstScreenBufState[0];
+            m_mutex.unlock();
+
+        }else if(m_firstScreenBufState[1] == 0 && m_secondScreenBufState[1] == 0){
+            m_firstScreenBufState[1] = 1;
+            qInfo() << "获取屏幕1 远程buffer2..." << "m_firstScreenBuf.second" << m_firstScreenBuf.second;
+            appendRB(m_firstScreenBuf.second,m_screenRect.first,0);
+//            if(m_firstScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "m_firstScreenBuf.second->fd(): " <<  m_firstScreenBuf.second->fd();
+//                if (m_boardVendorType) {
+//                    //arm hw
+//                    //processBuffer(rbuf, screenGeometry);
+//                    processBufferHw(m_firstScreenBuf.second, m_screenRect.first,0);
+//                } else {
+//                    //other
+//                    processBufferX86(m_firstScreenBuf.second, m_screenRect.first);
+//                }
+//                close(m_firstScreenBuf.second->fd());
+//                qInfo() << ">>>>>>>>>> m_firstScreenBuf.second->release()" <<  m_firstScreenBuf.second->fd();
+//                m_firstScreenBuf.second->release();
+//                qInfo() << ">>>>>>>>>> 2 fd" << "m_firstScreenBuf.second->fd(): " <<  m_firstScreenBuf.second->fd();
+//                m_firstScreenBuf.second = nullptr;
+//            }
+            qInfo() << "已获取屏幕1 远程buffer2" << "m_firstScreenBuf.second" << m_firstScreenBuf.second;
+            m_firstScreenBufState[1] = 0;
+            qInfo() << ">>>>>>>>>> append end m_firstScreenBufState[1]: " << m_firstScreenBufState[1];
+            m_mutex.unlock();
+
+        }
+
+        qInfo() << ">>>>>>>>>> append start m_secondScreenBufState[0]: " << m_secondScreenBufState[0];
+        qInfo() << ">>>>>>>>>> append start m_secondScreenBufState[1]: " << m_secondScreenBufState[1];
+
+        if(m_secondScreenBufState[0] == 0){
+            m_secondScreenBufState[0] = 1;
+            qInfo() << "获取远程屏幕2 buffer1..."  << "m_secondScreenBuf.first" << m_secondScreenBuf.first;
+            appendRB(m_secondScreenBuf.first,m_screenRect.second,1);
+//            if(m_secondScreenBuf.first != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "m_secondScreenBuf.first->fd(): " <<  m_secondScreenBuf.first->fd();
+//                if (m_boardVendorType) {
+//                    //arm hw
+//                    //processBuffer(rbuf, screenGeometry);
+//                    processBufferHw(m_secondScreenBuf.first, m_screenRect.second,1);
+//                } else {
+//                    //other
+//                    processBufferX86(m_secondScreenBuf.first, m_screenRect.second);
+//                }
+//                close(m_secondScreenBuf.first->fd());
+//                qInfo() << ">>>>>>>>>> m_secondScreenBuf.first->release()" <<  m_secondScreenBuf.first->fd();
+//                m_secondScreenBuf.first->release();
+//                qInfo() << ">>>>>>>>>> 2 fd" << "m_secondScreenBuf.first->fd(): " <<  m_secondScreenBuf.first->fd();
+//                m_secondScreenBuf.first = nullptr;
+//            }
+            qInfo() << "已获取屏幕2 远程buffer1" << "m_secondScreenBuf.first" << m_secondScreenBuf.first;
+            m_secondScreenBufState[0] = 0;
+            qInfo() << ">>>>>>>>>> append end m_secondScreenBufState[0]: " << m_firstScreenBufState[0];
+            m_mutex.unlock();
+        }else if(m_secondScreenBufState[1] == 0){
+            m_secondScreenBufState[1] = 1;
+            qInfo() << "获取屏幕2 远程buffer2..." << "m_secondScreenBuf.second" << m_secondScreenBuf.second;
+            appendRB(m_secondScreenBuf.second,m_screenRect.second,1);
+//            if(m_secondScreenBuf.second != nullptr){
+//                qInfo() << ">>>>>>>>>> 1 fd" << "m_secondScreenBuf.second->fd(): " <<  m_secondScreenBuf.second->fd();
+//                if (m_boardVendorType) {
+//                    //arm hw
+//                    //processBuffer(rbuf, screenGeometry);
+//                    processBufferHw(m_secondScreenBuf.second, m_screenRect.second,1);
+//                } else {
+//                    //other
+//                    processBufferX86(m_secondScreenBuf.second, m_screenRect.second);
+//                }
+//                close(m_secondScreenBuf.second->fd());
+//                qInfo() << ">>>>>>>>>> m_secondScreenBuf.second->release()" <<  m_secondScreenBuf.second->fd();
+//                m_secondScreenBuf.second->release();
+//                qInfo() << ">>>>>>>>>> 2 fd" << "m_secondScreenBuf.second->fd(): " <<  m_secondScreenBuf.second->fd();
+//                m_secondScreenBuf.second = nullptr;
+//            }
+            qInfo() << "已获取屏幕2 远程buffer2"<< "m_secondScreenBuf.second" << m_secondScreenBuf.second;
+            //                m_secondScreenBufState[0] = 0;
+            m_secondScreenBufState[1] = 0;
+            qInfo() << ">>>>>>>>>> append end m_secondScreenBufState[1]: " << m_firstScreenBufState[1];
+            m_mutex.unlock();
+
+        }
+
+        bufferCount++;
+
+    }
+    qInfo() << "停止获取远程buffer" ;
+
+}
+
 void WaylandIntegration::WaylandIntegrationPrivate::initEgl()
 {
     qDebug() << "正在初始化EGL";
@@ -1127,7 +1483,7 @@ void WaylandIntegration::WaylandIntegrationPrivate::appendBuffer(unsigned char *
             m_freeList.removeFirst();
         }
     }
-    //qDebug() << "存视频帧 m_waylandList.size(): " << m_waylandList.size() << " , m_freeList.size(): " << m_freeList.size();
+    qDebug() << "存视频帧 m_waylandList.size(): " << m_waylandList.size() << " , m_freeList.size(): " << m_freeList.size();
 }
 
 void WaylandIntegration::WaylandIntegrationPrivate::initScreenFrameBuffer()
@@ -1158,6 +1514,7 @@ void WaylandIntegration::WaylandIntegrationPrivate::initScreenFrameBuffer()
     m_curNewImageScreenFrames[1]._flag = false;
 }
 
+
 int WaylandIntegration::WaylandIntegrationPrivate::frameIndex = 0;
 
 bool WaylandIntegration::WaylandIntegrationPrivate::getFrame(waylandFrame &frame)
@@ -1186,7 +1543,7 @@ bool WaylandIntegration::WaylandIntegrationPrivate::getFrame(waylandFrame &frame
         //回收空闲内存，重复使用
         m_freeList.append(wFrame._frame);
         //qDebug() << "获取视频帧";
-        //qDebug() << "获取视频帧 m_waylandList.size(): " << m_waylandList.size() << " , m_freeList.size(): " << m_freeList.size();
+        qDebug() << "获取视频帧 m_waylandList.size(): " << m_waylandList.size() << " , m_freeList.size(): " << m_freeList.size();
         return true;
     }
 }
