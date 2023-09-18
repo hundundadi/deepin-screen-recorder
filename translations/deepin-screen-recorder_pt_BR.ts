@@ -136,6 +136,10 @@ clique no ícone da bandeja ou use o atalho</translation>
         <source>Pin Screenshots</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

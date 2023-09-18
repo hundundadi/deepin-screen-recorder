@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=com.deepin.CutoutScreenShots
+#Exec=/usr/bin/deepin-cutout-screenshots --dbus
+Exec=/usr/bin/dbus-send --session --type=method_call --print-reply --dest=com.deepin.SessionManager /com/deepin/StartManager com.deepin.StartManager.RunCommand string:"/usr/bin/deepin-cutout-screenshots" array:string:"--dbus"

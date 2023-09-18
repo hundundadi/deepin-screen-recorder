@@ -136,6 +136,10 @@ o utilizza nuovamente la scorciatoia da tastiera per terminare la registrazione<
         <source>Pin Screenshots</source>
         <translation>Blocca screenshot</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

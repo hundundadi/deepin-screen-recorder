@@ -135,6 +135,10 @@ or press the shortcut again to stop recording</source>
         <source>Pin Screenshots</source>
         <translation>چاپلاق</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

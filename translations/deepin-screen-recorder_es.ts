@@ -136,6 +136,10 @@ o haga clic en el icono de la bandeja</translation>
         <source>Pin Screenshots</source>
         <translation>Anclar captura de pantalla</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

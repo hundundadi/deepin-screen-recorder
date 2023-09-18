@@ -3,7 +3,8 @@ TEMPLATE  = subdirs
 SUBDIRS  += \
     src \
     src/dde-dock-plugins \
-    src/pin_screenshots
+    src/pin_screenshots \
+    src/cutout_screenshots
 
 
 translations.path = /usr/share/deepin-screen-recorder/translations

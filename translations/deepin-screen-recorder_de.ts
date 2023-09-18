@@ -136,6 +136,10 @@ oder drücken Sie die Tastenkombination erneut, um die Aufnahme zu stoppen</tran
         <source>Pin Screenshots</source>
         <translation>Bildschirmfotos anheften</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

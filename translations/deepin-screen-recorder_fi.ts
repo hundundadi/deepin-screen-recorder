@@ -136,6 +136,10 @@ tai lopeta tallennus painamalla pikakuvaketta uudelleen</translation>
         <source>Pin Screenshots</source>
         <translation>Kiinnitä kaappaukset</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

@@ -136,6 +136,10 @@ ou prema de novo o atallo para deixar de gravar</translation>
         <source>Pin Screenshots</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

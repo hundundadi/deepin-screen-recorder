@@ -136,6 +136,10 @@ pe bouezit adarre war ar verradenn evit paouez an enrolladenn</translation>
         <source>Pin Screenshots</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

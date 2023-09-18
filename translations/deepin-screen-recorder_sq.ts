@@ -136,6 +136,10 @@ klikoni ikonën e panelit, ose rishtypni shkurtoren</translation>
         <source>Pin Screenshots</source>
         <translation>Fiksoni Foto Ekrani</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>

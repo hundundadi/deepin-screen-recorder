@@ -136,6 +136,10 @@ v oznamovací oblasti panelu nebo stiskněte klávesovou zkratku</translation>
         <source>Pin Screenshots</source>
         <translation>Připnout snímky obrazovky</translation>
     </message>
+    <message>
+        <source>Cutout Screenshots</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>RecordProcess</name>
